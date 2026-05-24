@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SylvaLab — Katalog Alat</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background-image: url('https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1920&q=80');
+    background-size: cover; background-position: center; background-attachment: fixed;
+    min-height: 100vh; color: white;
+  }
+  .glass {
+    background: rgba(10,38,21,0.72);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .glass-card {
+    background: rgba(15,56,30,0.55);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: transform .2s, box-shadow .2s, border-color .2s;
+  }
+  .glass-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0,0,0,.4);
+    border-color: rgba(0,230,118,.25);
+  }
+  .glass-input {
+    background: rgba(255,255,255,0.07) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    color: white !important; outline: none; transition: border-color .2s;
+  }
+  .glass-input:focus { border-color: rgba(0,230,118,.5) !important; }
+  .glass-input::placeholder { color: rgba(255,255,255,.3) !important; }
+  /* Cart drawer */
+  .cart-drawer {
+    position: fixed; top:0; right:-110%; width:380px; height:100%;
+    transition: right .35s cubic-bezier(.4,0,.2,1); z-index:200;
+  }
+  .cart-drawer.open { right:0; }
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:199; display:none; }
+  .overlay.show { display:block; }
+  /* Toast */
+  .toast { position:fixed; bottom:24px; right:-120%; transition:right .4s cubic-bezier(.68,-.55,.265,1.55); z-index:300; }
+  .toast.show { right:24px; }
+  /* Skeleton shimmer */
+  .skeleton { background: linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 75%); background-size:200% 100%; animation:shimmer 1.5s infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  /* Filter chip */
+  .chip { transition: all .15s; }
+  .chip.active, .chip:hover { background:rgba(0,230,118,.15); border-color:rgba(0,230,118,.4); color:#00e676; }
+  /* Score bar */
+  .score-fill { transition: width .8s ease; }
+  /* Card btn */
+  .btn-add { transition: all .15s; }
+  .btn-add:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn-add.in-cart { background:rgba(0,230,118,.15)!important; color:#00e676!important; border-color:rgba(0,230,118,.3)!important; }
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-thumb { background:rgba(0,230,118,.3); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<!-- ── TOAST ── -->
+<div id="toast" class="toast glass rounded-2xl p-4 flex items-center gap-3 border-l-4 border-neon max-w-xs shadow-2xl">
+  <i id="toast-icon" class="fa-solid fa-check-circle text-2xl flex-shrink-0" style="color:#00e676"></i>
+  <p id="toast-msg" class="text-sm leading-snug">—</p>
+</div>
+
+<!-- ── OVERLAY ── -->
+<div class="overlay" id="overlay" onclick="closeCart()"></div>
+
+<!-- ── CART DRAWER ── -->
+<div class="cart-drawer glass shadow-2xl flex flex-col" id="cartDrawer">
+  <div class="px-5 py-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+    <h3 style="font-family:'DM Serif Display',serif;font-size:18px">Keranjang</h3>
+    <button onclick="closeCart()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition">✕</button>
+  </div>
+  <div class="flex-1 overflow-y-auto px-5 py-4" id="cart-items">
+    <div class="text-center text-gray-500 py-12 text-sm">Keranjang masih kosong</div>
+  </div>
+  <div class="px-5 py-4 border-t border-white/10 flex-shrink-0 space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">Tgl Ambil</label>
+        <input id="tgl-pinjam" type="date" class="glass-input w-full h-10 rounded-lg px-3 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">Tgl Kembali</label>
+        <input id="tgl-kembali" type="date" class="glass-input w-full h-10 rounded-lg px-3 text-sm">
+      </div>
+    </div>
+    <button id="btn-checkout" onclick="submitPeminjaman()"
+      class="w-full h-11 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition hover:opacity-90"
+      style="background:#00e676;color:#0f381e" disabled>
+      <i class="fa-solid fa-paper-plane text-xs"></i> Ajukan Permohonan
+    </button>
+  </div>
+</div>
+
+<!-- ── NAV ── -->
+<nav class="glass sticky top-0 z-40 px-5 py-3.5 flex items-center justify-between" style="backdrop-filter:blur(20px)">
+  <a href="index.html" class="flex items-center gap-2.5">
+    <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(0,230,118,.12);border:1px solid rgba(0,230,118,.2)">
+      <i class="fa-solid fa-leaf text-sm" style="color:#00e676"></i>
+    </div>
+    <span style="font-family:'DM Serif Display',serif;font-size:17px">SylvaLab</span>
+  </a>
+  <div class="flex items-center gap-3">
+    <div class="text-sm text-gray-400" id="nav-user">Memuat...</div>
+    <!-- Cart button -->
+    <button onclick="openCart()" class="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition hover:bg-white/10" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12)">
+      <i class="fa-solid fa-basket-shopping"></i>
+      <span id="cart-count" class="text-xs font-bold px-1.5 py-0.5 rounded-full" style="background:#00e676;color:#0f381e;min-width:20px;text-align:center">0</span>
+    </button>
+    <button onclick="logout()" class="text-gray-400 hover:text-white text-xs transition px-2 py-1.5 rounded-lg hover:bg-white/10">
+      <i class="fa-solid fa-right-from-bracket"></i>
+    </button>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<div class="relative overflow-hidden px-5 py-12 lg:py-16" style="background:rgba(0,0,0,.25)">
+  <div class="max-w-5xl mx-auto">
+    <!-- Green Score bar (shown when logged in) -->
+    <div id="score-section" class="glass-card rounded-2xl px-5 py-4 mb-8 flex items-center gap-4 flex-wrap hidden">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-leaf" style="color:#00e676"></i>
+        <span class="text-sm">Green Score</span>
+      </div>
+      <span class="text-2xl font-bold" style="color:#00e676;font-family:'DM Serif Display',serif" id="score-num">0</span>
+      <div class="flex-1 min-w-24 h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,.1)">
+        <div class="score-fill h-full rounded-full" style="background:#00e676;width:0%" id="score-fill"></div>
+      </div>
+      <span class="text-xs text-gray-400" id="score-label">Peminjam Baru</span>
+    </div>
+    <!-- Heading -->
+    <h1 style="font-family:'DM Serif Display',serif;font-size:clamp(28px,5vw,48px);line-height:1.15;margin-bottom:10px">
+      Katalog <em style="color:#00e676">Peralatan</em><br>Laboratorium
+    </h1>
+    <p class="text-gray-400 max-w-md leading-relaxed" style="font-size:15px">
+      Pilih alat, tentukan tanggal, dan ajukan peminjaman. Admin akan memproses dalam waktu singkat.
+    </p>
+    <!-- Quick stats -->
+    <div class="flex gap-6 mt-7 flex-wrap">
+      <div>
+        <span class="text-3xl font-bold" style="color:#00e676;font-family:'DM Serif Display',serif" id="stat-total">—</span>
+        <span class="text-gray-500 text-sm ml-2">Jenis Alat</span>
+      </div>
+      <div>
+        <span class="text-3xl font-bold" style="color:#00e676;font-family:'DM Serif Display',serif" id="stat-avail">—</span>
+        <span class="text-gray-500 text-sm ml-2">Tersedia</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FILTER ── -->
+<div class="max-w-5xl mx-auto px-5 py-5 flex items-center gap-2 flex-wrap sticky top-14 z-30" style="background:rgba(0,0,0,.35);backdrop-filter:blur(12px)">
+  <div class="relative flex-1 min-w-48 max-w-sm">
+    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+    <input id="search" type="text" class="glass-input w-full h-9 rounded-lg pl-8 pr-3 text-sm" placeholder="Cari alat..." oninput="filterRender()">
+  </div>
+  <button onclick="setFilter(this,'semua')" class="chip active px-3.5 py-1.5 rounded-full text-xs font-medium" style="background:rgba(0,230,118,.15);border:1px solid rgba(0,230,118,.3);color:#00e676">Semua</button>
+  <button onclick="setFilter(this,'Laboratorium')" class="chip px-3.5 py-1.5 rounded-full text-xs font-medium" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9ca3af">Laboratorium</button>
+  <button onclick="setFilter(this,'Elektronika')" class="chip px-3.5 py-1.5 rounded-full text-xs font-medium" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9ca3af">Elektronika</button>
+  <button onclick="setFilter(this,'Pengukuran')" class="chip px-3.5 py-1.5 rounded-full text-xs font-medium" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9ca3af">Pengukuran</button>
+  <button onclick="setFilter(this,'Navigasi')" class="chip px-3.5 py-1.5 rounded-full text-xs font-medium" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9ca3af">Navigasi</button>
+</div>
+
+<!-- ── GRID ── -->
+<main class="max-w-5xl mx-auto px-5 pb-20">
+  <div id="grid" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
+</main>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwQnP_7mA24EML-FMEvHE_y1thZTpmBrACEonUxauvR8quDwarcS3taqOcQktHSTzfA/exec';
+let allAlat = [], cart = [], activeFilter = 'semua', user = null;
+
+// ── AUTH ──────────────────────────────────────────────────
+(function() {
+  const u = sessionStorage.getItem('sylvalab_user');
+  if (!u) { window.location.href = 'login.html'; return; }
+  user = JSON.parse(u);
+  const nama = user.nama.split(' ')[0];
+  document.getElementById('nav-user').innerHTML = `Halo, <strong>${nama}</strong>`;
+  // Green score
+  const score = parseInt(user.green_score)||0;
+  document.getElementById('score-num').textContent = score;
+  document.getElementById('score-fill').style.width = Math.min(score,100)+'%';
+  document.getElementById('score-section').classList.remove('hidden');
+  const labels = [[0,'Peminjam Baru'],[30,'Peminjam Aktif'],[60,'Peminjam Terpercaya'],[90,'Peminjam Teladan 🏆']];
+  document.getElementById('score-label').textContent = [...labels].filter(l=>score>=l[0]).pop()[1];
+  // Default dates
+  const today = new Date().toISOString().split('T')[0];
+  const nw    = new Date(Date.now()+7*864e5).toISOString().split('T')[0];
+  document.getElementById('tgl-pinjam').value = today;
+  document.getElementById('tgl-kembali').value = nw;
+  document.getElementById('tgl-pinjam').min = today;
+  document.getElementById('tgl-kembali').min = today;
+})();
+
+// ── LOAD DATA ────────────────────────────────────────────
+async function loadAlat() {
+  showSkeleton();
+  try {
+    const res = await fetch(`${API}?action=getEquipments`);
+    const data = await res.json();
+    allAlat = Array.isArray(data) ? data : (data.data||[]);
+    document.getElementById('stat-total').textContent = allAlat.length;
+    document.getElementById('stat-avail').textContent = allAlat.filter(a=>parseInt(a.Stok_Tersedia)>0).length;
+    filterRender();
+    gsap.from('#grid .glass-card',{y:20,opacity:0,duration:.4,stagger:.05,ease:'power2.out'});
+  } catch(e) {
+    document.getElementById('grid').innerHTML = `<div class="col-span-full text-center py-20 text-gray-500"><i class="fa-solid fa-wifi text-3xl mb-3 block opacity-40"></i>Gagal memuat data. Coba muat ulang halaman.</div>`;
+  }
+}
+
+function showSkeleton() {
+  let h='';
+  for(let i=0;i<6;i++) h+=`<div class="glass-card rounded-2xl overflow-hidden">
+    <div class="skeleton w-full" style="aspect-ratio:4/3"></div>
+    <div class="p-4 space-y-2">
+      <div class="skeleton h-3 w-16 rounded"></div>
+      <div class="skeleton h-4 rounded"></div>
+      <div class="skeleton h-3 w-24 rounded"></div>
+      <div class="skeleton h-9 rounded-xl mt-3"></div>
+    </div></div>`;
+  document.getElementById('grid').innerHTML = h;
+}
+
+// ── FILTER & RENDER ───────────────────────────────────────
+function setFilter(btn, val) {
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.remove('active');
+    c.style.cssText = 'background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#9ca3af';
+  });
+  btn.classList.add('active');
+  btn.style.cssText = 'background:rgba(0,230,118,.15);border:1px solid rgba(0,230,118,.3);color:#00e676';
+  activeFilter = val;
+  filterRender();
+}
+function filterRender() {
+  const q = document.getElementById('search').value.toLowerCase();
+  let list = allAlat;
+  if (activeFilter !== 'semua') list = list.filter(a => a.Kategori === activeFilter);
+  if (q) list = list.filter(a => a.Nama_Alat.toLowerCase().includes(q));
+  renderGrid(list);
+}
+function renderGrid(list) {
+  if (!list.length) {
+    document.getElementById('grid').innerHTML = `<div class="col-span-full text-center py-20 text-gray-500"><i class="fa-solid fa-magnifying-glass text-3xl mb-3 block opacity-40"></i>Tidak ada alat yang cocok.</div>`;
+    return;
+  }
+  document.getElementById('grid').innerHTML = list.map(a => {
+    const stok = parseInt(a.Stok_Tersedia)||0;
+    const tot  = parseInt(a.Stok_Total)||0;
+    const empty = stok === 0;
+    const inCart = cart.some(c => c.ID_Alat === a.ID_Alat);
+    // Fix broken URLs
+    let img = a.URL_Foto||'';
+    if (!img || img.includes('[') || img.includes('magnific.com') || img.includes('susercontent')) {
+      img = `https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=400&q=70`;
+    }
+    const stockCls = empty ? 'bg-red-500/15 text-red-400 border-red-500/20' : stok<=2 ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20' : 'border-neon/20 text-neon' ;
+    const stockTxt = empty ? 'Stok Habis' : stok<=2 ? `Hampir Habis (${stok})` : `Tersedia (${stok})`;
+    const btnStyle = inCart
+      ? 'background:rgba(0,230,118,.12);color:#00e676;border:1px solid rgba(0,230,118,.3)'
+      : empty ? 'background:rgba(255,255,255,.05);color:#6b7280;cursor:not-allowed;border:1px solid rgba(255,255,255,.1)'
+      : 'background:#00e676;color:#0f381e';
+    const btnTxt = inCart ? '<i class="fa-solid fa-check mr-1.5 text-xs"></i>Di Keranjang' : empty ? '<i class="fa-solid fa-ban mr-1.5 text-xs"></i>Stok Habis' : '<i class="fa-solid fa-plus mr-1.5 text-xs"></i>Tambahkan';
+    return `<div class="glass-card rounded-2xl overflow-hidden">
+      <img src="${img}" alt="${a.Nama_Alat}" class="w-full object-cover" style="aspect-ratio:4/3"
+        onerror="this.src='https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=400&q=70'">
+      <div class="p-4">
+        <span class="text-xs px-2 py-0.5 rounded-full mb-2 inline-block" style="background:rgba(0,230,118,.1);color:#00e676;border:1px solid rgba(0,230,118,.15)">${a.Kategori||'Umum'}</span>
+        <div class="font-medium text-sm mb-1 leading-tight">${a.Nama_Alat}</div>
+        <div class="text-xs text-gray-500 mb-3">${a.ID_Alat} &middot; Total: ${tot}</div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs px-2 py-1 rounded-full border ${stockCls}" style="${!empty&&stok>2?'background:rgba(0,230,118,.1)':''}">${stockTxt}</span>
+        </div>
+        <button class="btn-add w-full h-9 rounded-xl text-sm font-medium ${inCart?'in-cart':''}"
+          style="${btnStyle}" ${empty?'disabled':''} id="btn-${a.ID_Alat}"
+          onclick="toggleCart(${JSON.stringify(a).replace(/"/g,'&quot;')})">
+          ${btnTxt}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── CART ─────────────────────────────────────────────────
+function toggleCart(alat) {
+  const idx = cart.findIndex(c=>c.ID_Alat===alat.ID_Alat);
+  if (idx>-1) { cart.splice(idx,1); toast(`Dihapus dari keranjang`); }
+  else { cart.push(alat); toast(`${alat.Nama_Alat} ditambahkan 🛒`,'ok'); }
+  updateCartBadge();
+  filterRender();
+  renderCartItems();
+}
+function updateCartBadge() { document.getElementById('cart-count').textContent = cart.length; }
+function openCart()  { document.getElementById('cartDrawer').classList.add('open'); document.getElementById('overlay').classList.add('show'); renderCartItems(); }
+function closeCart() { document.getElementById('cartDrawer').classList.remove('open'); document.getElementById('overlay').classList.remove('show'); }
+function renderCartItems() {
+  const el = document.getElementById('cart-items');
+  const btn = document.getElementById('btn-checkout');
+  if (!cart.length) {
+    el.innerHTML = `<div class="text-center text-gray-500 py-12 text-sm"><i class="fa-solid fa-basket-shopping text-3xl mb-3 block opacity-30"></i>Keranjang kosong</div>`;
+    btn.disabled = true; return;
+  }
+  btn.disabled = false;
+  el.innerHTML = cart.map(a => {
+    let img = a.URL_Foto||'';
+    if (!img||img.includes('[')||img.includes('magnific')) img='https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=80&q=70';
+    return `<div class="flex items-center gap-3 py-3 border-b border-white/10">
+      <img src="${img}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=80&q=70'">
+      <div class="flex-1 overflow-hidden">
+        <div class="text-sm font-medium truncate">${a.Nama_Alat}</div>
+        <div class="text-xs text-gray-500">${a.ID_Alat}</div>
+      </div>
+      <button onclick="toggleCart(${JSON.stringify(a).replace(/"/g,'&quot;')})" class="text-gray-500 hover:text-red-400 transition text-lg leading-none flex-shrink-0">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// ── SUBMIT ────────────────────────────────────────────────
+async function submitPeminjaman() {
+  if (!cart.length) return;
+  const tglP = document.getElementById('tgl-pinjam').value;
+  const tglK = document.getElementById('tgl-kembali').value;
+  if (!tglP||!tglK) { toast('Pilih tanggal!','warn'); return; }
+  if (tglK < tglP)  { toast('Tanggal kembali harus setelah tanggal ambil!','warn'); return; }
+  const btn = document.getElementById('btn-checkout');
+  btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Mengirim...';
+  let ok=0, fail=0;
+  for (const alat of cart) {
+    try {
+      const url = `${API}?action=createTransaction&idAlat=${alat.ID_Alat}&nim=${encodeURIComponent(user.nim)}&tglPinjam=${tglP}&tglKembali=${tglK}`;
+      const res = await fetch(url);
+      const d = await res.json();
+      if (d.success) ok++; else fail++;
+    } catch(e) { fail++; }
+  }
+  if (ok>0) { toast(`✅ ${ok} permohonan berhasil diajukan!`,'ok'); cart=[]; updateCartBadge(); closeCart(); filterRender(); }
+  if (fail>0) toast(`⚠ ${fail} permohonan gagal`,'warn');
+  btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-paper-plane text-xs mr-1.5"></i>Ajukan Permohonan';
+}
+
+// ── TOAST ─────────────────────────────────────────────────
+let tt;
+function toast(msg, type='') {
+  const t=document.getElementById('toast'), i=document.getElementById('toast-icon'), m=document.getElementById('toast-msg');
+  const cfg={ok:{i:'fa-check-circle',c:'#00e676'},warn:{i:'fa-circle-exclamation',c:'#facc15'},'':{i:'fa-circle-info',c:'#60a5fa'}};
+  const c=cfg[type]||cfg[''];
+  i.className=`fa-solid ${c.i} text-2xl flex-shrink-0`; i.style.color=c.c;
+  t.style.borderLeftColor=c.c; m.textContent=msg;
+  t.classList.add('show'); clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),3000);
+}
+function logout() { sessionStorage.removeItem('sylvalab_user'); window.location.href='login.html'; }
+
+loadAlat();
+</script>
+</body>
+</html>

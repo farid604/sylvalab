@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SylvaLab — Masuk</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background-image: url('https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1920&q=80');
+    background-size: cover; background-position: center; background-attachment: fixed;
+    min-height: 100vh; color: white;
+  }
+  .glass {
+    background: rgba(10,38,21,0.75);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .glass-input {
+    background: rgba(255,255,255,0.07) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    color: white !important; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .glass-input:focus {
+    border-color: rgba(0,230,118,0.6) !important;
+    box-shadow: 0 0 0 3px rgba(0,230,118,0.1) !important;
+  }
+  .glass-input::placeholder { color: rgba(255,255,255,0.25) !important; }
+  .firefly {
+    position: absolute; border-radius: 50%;
+    background: rgba(0,230,118,0.7);
+    animation: fly linear infinite;
+    pointer-events: none;
+  }
+  @keyframes fly {
+    0%   { transform: translate(0,0) scale(1); opacity: 0; }
+    20%  { opacity: 1; }
+    80%  { opacity: 0.6; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0.3); opacity: 0; }
+  }
+  .btn-login { transition: all .2s; }
+  .btn-login:hover { transform: translateY(-1px); }
+  .btn-login:active { transform: translateY(0) scale(0.98); }
+  .spinner { width:18px; height:18px; border:2px solid rgba(15,56,30,0.3); border-top-color:#0f381e; border-radius:50%; animation: spin .7s linear infinite; display:none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 relative overflow-hidden">
+
+  <!-- Fireflies -->
+  <div id="fireflies"></div>
+
+  <!-- Overlay -->
+  <div class="absolute inset-0 bg-gradient-to-br from-black/40 via-transparent to-black/60 pointer-events-none"></div>
+
+  <!-- Card -->
+  <div class="glass rounded-3xl w-full max-w-md p-8 relative z-10 shadow-2xl" id="login-card">
+    <!-- Logo -->
+    <div class="flex items-center gap-3 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-neon/10 border border-neon/20 flex items-center justify-center" style="background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.2)">
+        <i class="fa-solid fa-leaf" style="color:#00e676"></i>
+      </div>
+      <div>
+        <div class="font-semibold tracking-wide text-white/90" style="font-family:'DM Serif Display',serif;font-size:18px">SylvaLab</div>
+        <div class="text-gray-500 tracking-widest" style="font-size:10px">LAB KEHUTANAN UNSULBAR</div>
+      </div>
+    </div>
+
+    <!-- Heading -->
+    <h1 style="font-family:'DM Serif Display',serif;font-size:28px;line-height:1.2;margin-bottom:6px">
+      Selamat<br><em style="color:#00e676">datang</em> kembali
+    </h1>
+    <p class="text-gray-400 text-sm mb-8">Masuk dengan NIM atau NIP untuk melanjutkan</p>
+
+    <!-- Form -->
+    <div class="space-y-4 mb-6">
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-2">NIM / NIP</label>
+        <div class="relative">
+          <i class="fa-solid fa-id-card absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+          <input id="nim" type="text" class="glass-input w-full h-12 rounded-xl pl-9 pr-4 text-sm"
+            placeholder="Contoh: D0521001" autocomplete="username">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-2">Password</label>
+        <div class="relative">
+          <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+          <input id="password" type="password" class="glass-input w-full h-12 rounded-xl pl-9 pr-10 text-sm"
+            placeholder="••••••••" autocomplete="current-password">
+          <button onclick="togglePass()" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition" id="eye-btn">
+            <i class="fa-regular fa-eye text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error msg -->
+    <div id="msg-error" class="rounded-xl px-4 py-3 text-sm mb-4 hidden" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5"></div>
+
+    <!-- Button -->
+    <button class="btn-login w-full h-12 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+      id="btn-login" onclick="doLogin()"
+      style="background:#00e676;color:#0f381e">
+      <span id="btn-text">Masuk ke SylvaLab</span>
+      <div class="spinner" id="spinner"></div>
+      <i class="fa-solid fa-arrow-right text-xs" id="btn-arrow"></i>
+    </button>
+
+    <!-- Hint -->
+    <div class="mt-6 p-4 rounded-xl text-xs text-gray-500 leading-relaxed" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)">
+      <i class="fa-solid fa-circle-info mr-1.5" style="color:#00e676"></i>
+      Belum punya akun? Hubungi <strong class="text-gray-300">koordinator lab</strong> atau minta
+      <strong class="text-gray-300">Super Admin</strong> untuk mendaftarkan NIM Anda.
+    </div>
+
+    <!-- Footer -->
+    <p class="text-center text-gray-600 text-xs mt-6">SylvaLab v1.0 · Rp 0/bulan</p>
+  </div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwQnP_7mA24EML-FMEvHE_y1thZTpmBrACEonUxauvR8quDwarcS3taqOcQktHSTzfA/exec';
+
+// Redirect jika sudah login
+(function() {
+  const u = sessionStorage.getItem('sylvalab_user');
+  if (u) {
+    const user = JSON.parse(u);
+    window.location.href = (user.role==='ADMIN'||user.role==='SUPER_ADMIN') ? 'admin.html' : 'index.html';
+  }
+})();
+
+// Enter key
+document.getElementById('password').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('nim').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('password').focus(); });
+
+// Toggle password visibility
+function togglePass() {
+  const inp = document.getElementById('password');
+  const ico = document.querySelector('#eye-btn i');
+  if (inp.type==='password') { inp.type='text'; ico.className='fa-regular fa-eye-slash text-sm'; }
+  else { inp.type='password'; ico.className='fa-regular fa-eye text-sm'; }
+}
+
+async function doLogin() {
+  const nim  = document.getElementById('nim').value.trim();
+  const pass = document.getElementById('password').value.trim();
+  const btn  = document.getElementById('btn-login');
+  const txt  = document.getElementById('btn-text');
+  const spin = document.getElementById('spinner');
+  const arr  = document.getElementById('btn-arrow');
+  const err  = document.getElementById('msg-error');
+
+  if (!nim || !pass) { showErr('Harap isi NIM dan Password.'); return; }
+
+  btn.disabled = true; txt.textContent = 'Memverifikasi...';
+  spin.style.display = 'block'; arr.style.display = 'none';
+  err.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API}?action=login&nim=${encodeURIComponent(nim)}&password=${encodeURIComponent(pass)}`);
+    const data = await res.json();
+
+    if (data.success) {
+      sessionStorage.setItem('sylvalab_user', JSON.stringify(data.user));
+      txt.textContent = '✓ Berhasil! Mengalihkan...';
+      btn.style.background = 'rgba(0,230,118,.6)';
+      setTimeout(() => {
+        window.location.href = (data.user.role==='ADMIN'||data.user.role==='SUPER_ADMIN') ? 'admin.html' : 'index.html';
+      }, 600);
+    } else {
+      showErr(data.message || 'NIM atau Password salah.');
+      reset();
+    }
+  } catch(e) {
+    showErr('Tidak dapat terhubung ke server. Coba beberapa saat lagi.');
+    reset();
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('msg-error');
+  el.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-2"></i>' + msg;
+  el.classList.remove('hidden');
+}
+function reset() {
+  const btn=document.getElementById('btn-login'), txt=document.getElementById('btn-text'),
+        spin=document.getElementById('spinner'), arr=document.getElementById('btn-arrow');
+  btn.disabled=false; txt.textContent='Masuk ke SylvaLab';
+  spin.style.display='none'; arr.style.display='inline';
+}
+
+// GSAP entrance
+gsap.from('#login-card', { y:30, opacity:0, duration:.7, ease:'power3.out' });
+
+// Fireflies
+const ff = document.getElementById('fireflies');
+for (let i=0; i<18; i++) {
+  const el = document.createElement('div');
+  el.className = 'firefly';
+  const size = Math.random()*3+1;
+  const dur  = Math.random()*12+8;
+  el.style.cssText = `
+    width:${size}px; height:${size}px;
+    left:${Math.random()*100}vw; top:${Math.random()*100}vh;
+    --dx:${(Math.random()-0.5)*200}px; --dy:${(Math.random()-0.5)*200}px;
+    animation-duration:${dur}s;
+    animation-delay:${Math.random()*dur}s;
+    filter: blur(${size>2?'0':'1px'});
+  `;
+  ff.appendChild(el);
+}
+</script>
+</body>
+</html>
