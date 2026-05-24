@@ -643,4 +643,352 @@ function updateStats() {
   const dipinjam = allTrans.filter(t=>t.Status==='DIPINJAM').length;
   const selesai = allTrans.filter(t=>t.Status==='DIKEMBALIKAN').length;
   document.getElementById('st-alat').textContent = allAlat.length;
-  document.getElementById('st-pending
+  document.getElementById('st-pending').textContent = pending;
+  document.getElementById('st-dipinjam').textContent = dipinjam;
+  document.getElementById('st-selesai').textContent = selesai;
+  document.getElementById('badge-pending').textContent = pending;
+}
+
+// ── EMPTY STATE HELPER ────────────────────────────────────
+function emptyRow(msg, cols, icon='fa-folder-open') {
+  return `<tr><td colspan="${cols}" class="px-6 py-16 text-center">
+    <div class="flex flex-col items-center justify-center opacity-60">
+      <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-2xl mb-3 text-gray-400">
+        <i class="fa-solid ${icon}"></i>
+      </div>
+      <p class="text-sm text-gray-400 font-medium">${msg}</p>
+    </div>
+  </td></tr>`;
+}
+
+// ── RENDER TABLES ─────────────────────────────────────────
+function renderDashboard() {
+  const pending = allTrans.filter(t=>t.Status==='PENDING').slice(0,5);
+  const tb = document.getElementById('tbl-dash-pending');
+  if (!pending.length) { tb.innerHTML = emptyRow('Tidak ada permohonan baru saat ini', 5, 'fa-check-double'); return; }
+  tb.innerHTML = pending.map(t => `
+    <tr class="border-b border-white/5">
+      <td class="px-5 py-3 font-mono text-xs text-gray-400">${t.ID_Trans}</td>
+      <td class="px-5 py-3 font-medium text-gray-200">${t.NIM_Peminjam||'—'}</td>
+      <td class="px-5 py-3 text-neon font-mono text-xs font-bold bg-neon/5 rounded-lg inline-block mt-2 mb-2">${t.ID_Alat}</td>
+      <td class="px-5 py-3 text-gray-300">${t.Tgl_Kembali||'—'}</td>
+      <td class="px-5 py-3 text-right">${actionBtns(t,'dash')}</td>
+    </tr>`).join('');
+}
+
+function renderPermohonan() {
+  const pending = allTrans.filter(t=>t.Status==='PENDING');
+  const tb = document.getElementById('tbl-permohonan');
+  if (!pending.length) { tb.innerHTML = emptyRow('Tidak ada permohonan yang menunggu', 6, 'fa-envelope-open'); return; }
+  tb.innerHTML = pending.map(t => `
+    <tr class="border-b border-white/5" id="row-${t.ID_Trans}">
+      <td class="px-5 py-3 font-mono text-xs text-gray-400">${t.ID_Trans}</td>
+      <td class="px-5 py-3 font-medium text-gray-200">${t.NIM_Peminjam||'—'}</td>
+      <td class="px-5 py-3 text-neon font-mono text-xs font-bold">${t.ID_Alat}</td>
+      <td class="px-5 py-3 text-gray-300">${t.Tgl_Pinjam||'—'}</td>
+      <td class="px-5 py-3 text-gray-300">${t.Tgl_Kembali||'—'}</td>
+      <td class="px-5 py-3 text-right">${actionBtns(t,'permohonan')}</td>
+    </tr>`).join('');
+}
+
+function renderBerjalan() {
+  const dipinjam = allTrans.filter(t=>t.Status==='DIPINJAM');
+  const tb = document.getElementById('tbl-berjalan');
+  if (!dipinjam.length) { tb.innerHTML = emptyRow('Tidak ada alat yang sedang dipinjam', 6, 'fa-box-open'); return; }
+  const today = new Date().toISOString().split('T')[0];
+  tb.innerHTML = dipinjam.map(t => {
+    const late = t.Tgl_Kembali && t.Tgl_Kembali < today;
+    const dateDisplay = late 
+      ? `<span class="bg-red-500/20 text-red-300 px-2 py-1 rounded text-xs font-bold border border-red-500/30">${t.Tgl_Kembali} ⚠ Terlambat</span>`
+      : `<span class="text-gray-300">${t.Tgl_Kembali||'—'}</span>`;
+      
+    return `<tr class="border-b border-white/5" id="row-${t.ID_Trans}">
+      <td class="px-5 py-3 font-mono text-xs text-gray-400">${t.ID_Trans}</td>
+      <td class="px-5 py-3 font-medium text-gray-200">${t.NIM_Peminjam||'—'}</td>
+      <td class="px-5 py-3 text-neon font-mono text-xs font-bold">${t.ID_Alat}</td>
+      <td class="px-5 py-3 text-gray-300">${t.Tgl_Pinjam||'—'}</td>
+      <td class="px-5 py-3">${dateDisplay}</td>
+      <td class="px-5 py-3 text-right">
+        <button onclick="aksi('return','${t.ID_Trans}','${t.ID_Alat}','${t.NIM_Peminjam||''}')"
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500 hover:text-white transition shadow-sm">
+          <i class="fa-solid fa-box-open"></i> Terima Alat
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlat() {
+  const tb = document.getElementById('tbl-alat');
+  if (!allAlat.length) { tb.innerHTML = emptyRow('Belum ada data alat di inventaris', 6, 'fa-toolbox'); return; }
+  tb.innerHTML = allAlat.map(a => {
+    const stok = parseInt(a.Stok_Tersedia)||0, tot = parseInt(a.Stok_Total)||0;
+    const sc = stok===0 ? 'text-red-400 font-bold' : stok<=2 ? 'text-yellow-300 font-bold' : 'text-neon font-bold';
+    return `<tr class="border-b border-white/5">
+      <td class="px-5 py-3 font-mono text-xs text-gray-400">${a.ID_Alat}</td>
+      <td class="px-5 py-3 font-medium text-gray-200">${a.Nama_Alat}</td>
+      <td class="px-5 py-3"><span class="text-[10px] uppercase font-bold tracking-wider bg-white/10 px-2.5 py-1 rounded-full">${a.Kategori||'—'}</span></td>
+      <td class="px-5 py-3 text-gray-300">${tot}</td>
+      <td class="px-5 py-3 ${sc}">${stok}</td>
+      <td class="px-5 py-3 text-right flex justify-end gap-2">
+        <button onclick='editAlat(${JSON.stringify(a).replace(/"/g,'&quot;')})' class="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-pen-to-square text-xs"></i> Edit
+        </button>
+        <button onclick="konfirmHapusAlat('${a.ID_Alat}','${a.Nama_Alat}')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/15 text-red-300 border border-red-500/20 hover:bg-red-500 hover:text-white transition flex items-center gap-1.5">
+          <i class="fa-solid fa-trash text-xs"></i> Hapus
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderUsers() {
+  const tb = document.getElementById('tbl-users');
+  if (!allUsers.length) { tb.innerHTML = emptyRow('Belum ada pengguna terdaftar', 5, 'fa-users'); return; }
+  const roleCls = {SUPER_ADMIN:'bg-red-500/15 text-red-300 border border-red-500/30', ADMIN:'bg-neon/15 text-green-300 border border-neon/30', PEMINJAM:'bg-white/10 text-gray-300 border border-white/20'};
+  tb.innerHTML = allUsers.map(u => `
+    <tr class="border-b border-white/5">
+      <td class="px-5 py-3 font-mono text-xs text-gray-400">${u.NIM_NIP}</td>
+      <td class="px-5 py-3 font-medium text-gray-200">${u.Nama_Lengkap}</td>
+      <td class="px-5 py-3"><span class="text-[10px] font-bold px-2.5 py-1 rounded-full ${roleCls[u.Role]||roleCls.PEMINJAM}">${u.Role}</span></td>
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-2">
+          <span class="text-neon font-bold text-sm w-6">${u.Green_Score||0}</span>
+          <div class="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div class="h-full bg-neon rounded-full score-fill shadow-[0_0_8px_rgba(0,230,118,0.5)]" style="width:${Math.min(u.Green_Score||0,100)}%"></div>
+          </div>
+        </div>
+      </td>
+      <td class="px-5 py-3 text-right">
+        <button onclick="konfirmHapusUser('${u.NIM_NIP}','${u.Nama_Lengkap}')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/15 text-red-300 border border-red-500/20 hover:bg-red-500 hover:text-white transition">
+          <i class="fa-solid fa-trash text-xs"></i> Hapus
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderArtikel() {
+  const el = document.getElementById('artikel-grid');
+  if (!allArtikel.length) {
+    el.innerHTML = `<div class="glass-light rounded-2xl p-10 text-center col-span-full">
+      <div class="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto text-2xl mb-4 text-gray-400 opacity-60">
+        <i class="fa-regular fa-newspaper"></i>
+      </div>
+      <p class="text-sm text-gray-400 font-medium">Belum ada artikel. Klik "Tulis Artikel" untuk mulai.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = allArtikel.map(a => `
+    <div class="glass-light rounded-2xl overflow-hidden flex flex-col transition-transform hover:-translate-y-1 duration-300 shadow-md">
+      ${a.URL_Cover ? `<img src="${a.URL_Cover}" class="w-full h-44 object-cover" onerror="this.style.display='none'"/>` : ''}
+      <div class="p-5 flex-1 flex flex-col">
+        <div class="text-xs text-neon font-medium mb-2"><i class="fa-regular fa-calendar mr-1"></i> ${a.Tanggal_Terbit||'—'}</div>
+        <h4 class="font-bold text-lg mb-2 text-white leading-snug">${a.Judul}</h4>
+        <p class="text-sm text-gray-400 line-clamp-3 leading-relaxed flex-1">${a.Konten_Teks||''}</p>
+      </div>
+    </div>`).join('');
+}
+
+// ── ACTION BUTTONS HELPER ─────────────────────────────────
+function actionBtns(t, ctx) {
+  return `<div class="flex justify-end gap-2">
+    <button onclick="aksi('reject','${t.ID_Trans}','${t.ID_Alat}','')"
+      class="w-8 h-8 rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500 hover:text-white transition flex items-center justify-center text-xs" title="Tolak">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <button onclick="aksi('approve','${t.ID_Trans}','${t.ID_Alat}','${t.NIM_Peminjam||''}')"
+      class="w-8 h-8 rounded-lg bg-neon/15 text-green-300 border border-neon/30 hover:bg-neon hover:text-forest transition flex items-center justify-center text-xs" title="Setujui">
+      <i class="fa-solid fa-check"></i>
+    </button>
+  </div>`;
+}
+
+// ── AKSI TRANSAKSI ────────────────────────────────────────
+function aksi(type, idTrans, idAlat, nim) {
+  const cfg = {
+    approve: { title:'Setujui Permohonan', msg:`Setujui <b>${idTrans}</b>?<br>Stok alat <span class="text-neon font-mono">${idAlat}</span> akan dipotong 1.`, icon:'fa-check-circle', iconcls:'bg-neon/20 text-neon border border-neon/30', btnCls:'bg-neon text-forest hover:bg-green-300' },
+    reject:  { title:'Tolak Permohonan',   msg:`Tolak <b>${idTrans}</b>?<br>Stok tidak akan berubah.`, icon:'fa-times-circle', iconcls:'bg-red-500/20 text-red-400 border border-red-500/30', btnCls:'bg-red-500 text-white hover:bg-red-400' },
+    return:  { title:'Proses Pengembalian', msg:`Konfirmasi alat <span class="text-neon font-mono">${idAlat}</span> dari transaksi <b>${idTrans}</b> telah dikembalikan secara fisik?`, icon:'fa-box-open', iconcls:'bg-blue-500/20 text-blue-400 border border-blue-500/30', btnCls:'bg-blue-500 text-white hover:bg-blue-400' }
+  };
+  const c = cfg[type];
+  showModal(c.title, c.msg, c.icon, c.iconcls, c.btnCls, async () => {
+    const urlMap = {
+      approve: `${API}?action=approveTransaction&ID_Trans=${idTrans}&ID_Alat=${idAlat}`,
+      reject:  `${API}?action=rejectTransaction&ID_Trans=${idTrans}`,
+      return:  `${API}?action=returnTransaction&ID_Trans=${idTrans}&ID_Alat=${idAlat}&nim=${encodeURIComponent(nim)}`
+    };
+    try {
+      const res = await fetch(urlMap[type]);
+      const d = await res.json();
+      if (d.success) {
+        toast(d.message, 'ok');
+        await loadTransaksi();
+        loadAlat();
+      } else {
+        toast(d.message||'Gagal', 'err');
+      }
+    } catch(e) { toast('Koneksi gagal','err'); }
+  });
+}
+
+// ── ALAT CRUD ─────────────────────────────────────────────
+function openModalAlat() {
+  document.getElementById('fa-id').value = '';
+  document.getElementById('fa-nama').value = '';
+  document.getElementById('fa-stok').value = '';
+  document.getElementById('fa-foto').value = '';
+  document.getElementById('modal-alat-title').textContent = 'Tambah Alat Baru';
+  document.getElementById('fa-submit').textContent = 'Simpan Alat';
+  document.getElementById('modal-alat').classList.remove('hidden');
+  document.getElementById('modal-alat').classList.add('flex');
+}
+function closeModalAlat() {
+  document.getElementById('modal-alat').classList.add('hidden');
+  document.getElementById('modal-alat').classList.remove('flex');
+}
+function editAlat(a) {
+  document.getElementById('fa-id').value = a.ID_Alat;
+  document.getElementById('fa-nama').value = a.Nama_Alat||'';
+  document.getElementById('fa-kat').value = a.Kategori||'Laboratorium';
+  document.getElementById('fa-stok').value = a.Stok_Total||'';
+  document.getElementById('fa-foto').value = a.URL_Foto||'';
+  document.getElementById('modal-alat-title').textContent = 'Edit: ' + a.Nama_Alat;
+  document.getElementById('fa-submit').textContent = 'Update Alat';
+  document.getElementById('modal-alat').classList.remove('hidden');
+  document.getElementById('modal-alat').classList.add('flex');
+}
+async function submitAlat() {
+  const id   = document.getElementById('fa-id').value;
+  const nama = document.getElementById('fa-nama').value.trim();
+  const kat  = document.getElementById('fa-kat').value;
+  const stok = document.getElementById('fa-stok').value.trim();
+  const foto = document.getElementById('fa-foto').value.trim();
+  if (!nama||!stok) { toast('Nama dan Stok wajib diisi!','warn'); return; }
+  const btn = document.getElementById('fa-submit');
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  const action = id ? 'updateAlat' : 'createAlat';
+  const params = id
+    ? `action=${action}&id=${id}&nama=${enc(nama)}&kategori=${enc(kat)}&stok=${stok}&foto=${enc(foto)}`
+    : `action=${action}&nama=${enc(nama)}&kategori=${enc(kat)}&stok=${stok}&foto=${enc(foto)}`;
+  try {
+    const d = await fetchGAS(params);
+    if (d.success) { toast(d.message,'ok'); closeModalAlat(); loadAlat(); }
+    else toast(d.message||'Gagal','err');
+  } catch(e) { toast('Koneksi gagal','err'); }
+  btn.disabled = false; btn.textContent = id ? 'Update Alat' : 'Simpan Alat';
+}
+function konfirmHapusAlat(id, nama) {
+  showModal('Hapus Alat', `Hapus <b>${nama}</b> (<span class="text-neon font-mono">${id}</span>) secara permanen?`, 'fa-trash', 'bg-red-500/20 text-red-400 border border-red-500/30', 'bg-red-500 text-white hover:bg-red-400', async () => {
+    const d = await fetchGAS(`action=deleteAlat&id=${id}`);
+    if (d.success) { toast(d.message,'ok'); loadAlat(); } else toast(d.message||'Gagal','err');
+  });
+}
+
+// ── USER CRUD ─────────────────────────────────────────────
+function openModalUser() {
+  document.getElementById('fu-nim').value=''; document.getElementById('fu-nama').value='';
+  document.getElementById('fu-pass').value='';
+  document.getElementById('modal-user').classList.remove('hidden');
+  document.getElementById('modal-user').classList.add('flex');
+}
+function closeModalUser() {
+  document.getElementById('modal-user').classList.add('hidden');
+  document.getElementById('modal-user').classList.remove('flex');
+}
+async function submitUser() {
+  const nim  = document.getElementById('fu-nim').value.trim();
+  const nama = document.getElementById('fu-nama').value.trim();
+  const role = document.getElementById('fu-role').value;
+  const pass = document.getElementById('fu-pass').value.trim()||'12345';
+  if (!nim||!nama) { toast('NIM dan Nama wajib diisi!','warn'); return; }
+  const d = await fetchGAS(`action=createUser&nim=${enc(nim)}&nama=${enc(nama)}&role=${role}&password=${enc(pass)}`);
+  if (d.success) { toast(d.message,'ok'); closeModalUser(); loadUsers(); } else toast(d.message||'Gagal','err');
+}
+function konfirmHapusUser(nim, nama) {
+  showModal('Hapus Pengguna', `Hapus akun <b>${nama}</b> (${nim})?`, 'fa-user-minus', 'bg-red-500/20 text-red-400 border border-red-500/30', 'bg-red-500 text-white hover:bg-red-400', async () => {
+    const d = await fetchGAS(`action=deleteUser&nim=${enc(nim)}`);
+    if (d.success) { toast(d.message,'ok'); loadUsers(); } else toast(d.message||'Gagal','err');
+  });
+}
+
+// ── ARTIKEL ───────────────────────────────────────────────
+function openModalArt() {
+  document.getElementById('modal-art').classList.remove('hidden');
+  document.getElementById('modal-art').classList.add('flex');
+  document.getElementById('art-tgl').value = new Date().toISOString().split('T')[0];
+}
+function closeModalArt() {
+  document.getElementById('modal-art').classList.add('hidden');
+  document.getElementById('modal-art').classList.remove('flex');
+}
+async function submitArtikel() {
+  const judul  = document.getElementById('art-judul').value.trim();
+  const tgl    = document.getElementById('art-tgl').value;
+  const konten = document.getElementById('art-konten').value.trim();
+  const cover  = document.getElementById('art-cover').value.trim();
+  if (!judul||!konten) { toast('Judul dan Isi wajib diisi!','warn'); return; }
+  const d = await fetchGAS(`action=createArticle&judul=${enc(judul)}&tanggal=${tgl}&konten=${enc(konten)}&cover=${enc(cover)}`);
+  if (d.success) { toast(d.message,'ok'); closeModalArt(); document.getElementById('art-judul').value=''; document.getElementById('art-konten').value=''; loadArtikel(); }
+  else toast(d.message||'Gagal','err');
+}
+
+// ── MODAL UTILS ───────────────────────────────────────────
+function showModal(title, msg, icon, iconCls, btnCls, cb) {
+  document.getElementById('modal-icon').className = `w-12 h-12 rounded-xl flex items-center justify-center text-xl ${iconCls}`;
+  document.getElementById('modal-icon').innerHTML = `<i class="fa-solid ${icon}"></i>`;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-msg').innerHTML = msg;
+  const btn = document.getElementById('modal-confirm');
+  btn.className = `px-4 py-2 rounded-lg text-sm font-bold shadow-md transition ${btnCls}`;
+  btn.textContent = 'Lanjutkan';
+  
+  const m = document.getElementById('modal');
+  const box = document.getElementById('modal-box');
+  m.classList.remove('hidden'); m.classList.add('flex');
+  setTimeout(() => box.classList.remove('scale-95', 'opacity-0'), 10);
+  modalCb = cb;
+}
+function closeModal() {
+  const box = document.getElementById('modal-box');
+  box.classList.add('scale-95');
+  setTimeout(() => {
+    document.getElementById('modal').classList.add('hidden');
+    document.getElementById('modal').classList.remove('flex');
+    modalCb = null;
+  }, 150);
+}
+function confirmAction() { closeModal(); if (modalCb) modalCb(); }
+
+// ── TOAST ─────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type='') {
+  const t = document.getElementById('toast'), icon = document.getElementById('toast-icon');
+  const title = document.getElementById('toast-title'), m = document.getElementById('toast-msg');
+  const cfg = {
+    ok:   {title:'Berhasil', icls:'fa-check-circle text-neon', border:'#00e676'},
+    err:  {title:'Gagal',    icls:'fa-circle-xmark text-red-400', border:'#ef4444'},
+    warn: {title:'Perhatian',icls:'fa-circle-exclamation text-yellow-400', border:'#eab308'},
+    '':   {title:'Info',     icls:'fa-circle-info text-blue-400', border:'#60a5fa'},
+  };
+  const c = cfg[type]||cfg[''];
+  title.textContent = c.title; m.innerHTML = msg;
+  icon.className = `fa-solid ${c.icls} text-2xl flex-shrink-0`;
+  t.style.borderLeftColor = c.border;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 4000);
+}
+
+// ── UTILS ─────────────────────────────────────────────────
+const enc = encodeURIComponent;
+
+// Close modal on click outside
+document.querySelectorAll('.modal-backdrop').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) { closeModal(); closeModalAlat(); closeModalUser(); closeModalArt(); } });
+});
+
+// ── INIT GSAP ANIMATION ───────────────────────────────────
+gsap.from('#sidebar', {x:-20, opacity:0, duration:.5, ease:'power2.out'});
+</script>
+</body>
+</html>
