@@ -62,6 +62,10 @@ tailwind.config = {
     z-index: 9999;
   }
   .toast.show { right: 24px; }
+  @media (max-width: 640px) {
+    .toast { left: -120%; right: auto; width: calc(100% - 32px); bottom: 16px; }
+    .toast.show { left: 16px; right: auto; }
+  }
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -220,10 +224,10 @@ tailwind.config = {
 </div>
 
 <!-- ── LAYOUT ── -->
-<div class="flex h-screen overflow-hidden">
+<div class="relative flex h-screen overflow-hidden">
 
   <!-- SIDEBAR -->
-  <aside class="glass w-60 flex-shrink-0 flex flex-col overflow-y-auto">
+  <aside id="sidebar" class="glass fixed md:static inset-y-0 left-0 z-40 w-72 md:w-60 flex-shrink-0 flex flex-col overflow-y-auto transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-out">
     <!-- Brand -->
     <div class="p-5 border-b border-white/10">
       <div class="flex items-center gap-3">
@@ -287,12 +291,20 @@ tailwind.config = {
     </div>
   </aside>
 
+  <!-- Overlay (mobile) -->
+  <div id="sidebar-overlay" class="fixed inset-0 z-30 bg-black/60 hidden md:hidden"></div>
+
   <!-- MAIN CONTENT -->
-  <div class="flex-1 overflow-y-auto">
+  <div class="flex-1 w-full overflow-y-auto">
 
     <!-- Top bar -->
-    <div class="glass sticky top-0 z-30 px-6 py-3 flex items-center justify-between border-b border-white/10">
-      <h2 class="font-semibold text-sm tracking-wide" id="topbar-title">Ringkasan</h2>
+    <div class="glass sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center justify-between border-b border-white/10">
+      <div class="flex items-center gap-3 min-w-0">
+        <button onclick="openSidebar()" class="md:hidden w-9 h-9 rounded-lg glass-light hover:bg-white/10 transition flex items-center justify-center" aria-label="Buka menu">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <h2 class="font-semibold text-sm tracking-wide truncate" id="topbar-title">Ringkasan</h2>
+      </div>
       <div class="flex items-center gap-3">
         <button onclick="loadAll()" class="glass-light px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 hover:bg-white/10 transition">
           <i class="fa-solid fa-rotate-right"></i> Muat Ulang
@@ -302,7 +314,7 @@ tailwind.config = {
     </div>
 
     <!-- Pages -->
-    <div class="p-6 lg:p-8">
+    <div class="p-4 sm:p-6 lg:p-8">
 
       <!-- ── DASHBOARD ── -->
       <div id="page-dashboard" class="page-section">
@@ -506,6 +518,24 @@ function updateClock() {
     now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
+// ── SIDEBAR (RESPONSIVE) ──────────────────────────────────
+let sidebarEl, sidebarOverlayEl;
+function openSidebar() {
+  if (!sidebarEl) sidebarEl = document.getElementById('sidebar');
+  if (!sidebarOverlayEl) sidebarOverlayEl = document.getElementById('sidebar-overlay');
+  sidebarEl?.classList.remove('-translate-x-full');
+  sidebarEl?.classList.add('translate-x-0');
+  sidebarOverlayEl?.classList.remove('hidden');
+}
+function closeSidebar() {
+  if (!sidebarEl) sidebarEl = document.getElementById('sidebar');
+  if (!sidebarOverlayEl) sidebarOverlayEl = document.getElementById('sidebar-overlay');
+  // Di desktop, sidebar tetap terlihat via md:translate-x-0
+  sidebarEl?.classList.add('-translate-x-full');
+  sidebarEl?.classList.remove('translate-x-0');
+  sidebarOverlayEl?.classList.add('hidden');
+}
+
 // ── NAVIGATION ────────────────────────────────────────────
 const titles = { dashboard:'Ringkasan', permohonan:'Permohonan', berjalan:'Sedang Dipinjam', alat:'Inventaris Alat', users:'Pengguna', artikel:'Jurnal Kanopi' };
 function showPage(id, btn) {
@@ -521,6 +551,7 @@ function showPage(id, btn) {
   if (id==='berjalan') renderBerjalan();
   if (id==='permohonan') renderPermohonan();
   gsap.from('#page-'+id, {y:12, opacity:0, duration:.4, ease:'power2.out'});
+  if (window.innerWidth < 768) closeSidebar();
 }
 
 // ── DATA LOADING ─────────────────────────────────────────
@@ -898,6 +929,8 @@ function toast(msg, type='') {
 const enc = encodeURIComponent;
 function logout() { sessionStorage.removeItem('sylvalab_user'); window.location.href='login.html'; }
 document.getElementById('modal').addEventListener('click',e=>{ if(e.target===document.getElementById('modal')) closeModal(); });
+document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
 
 // ── INIT GSAP ANIMATION ───────────────────────────────────
 gsap.from('.glass', {x:-20, opacity:0, duration:.5, ease:'power2.out'});
