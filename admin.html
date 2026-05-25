@@ -399,7 +399,7 @@ tailwind.config = {
             <h3 class="text-sm font-semibold flex items-center gap-2">
               <i class="fa-regular fa-bell text-yellow-400"></i> Permohonan Menunggu Persetujuan
             </h3>
-            <button onclick="showPage('permohonan', document.querySelector('[data-page=permohonan]'))" class="text-xs text-neon hover:underline">Lihat semua →</button>
+            <button onclick="showPage('permohonan', document.querySelector('.nav-item[onclick*=permohonan]'))" class="text-xs text-neon hover:underline">Lihat semua →</button>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -585,10 +585,12 @@ function openSidebar() {
 function closeSidebar() {
   if (!sidebarEl) sidebarEl = document.getElementById('sidebar');
   if (!sidebarOverlayEl) sidebarOverlayEl = document.getElementById('sidebar-overlay');
-  // Di desktop, sidebar tetap terlihat via md:translate-x-0
-  sidebarEl?.classList.add('-translate-x-full');
-  sidebarEl?.classList.remove('translate-x-0');
-  sidebarOverlayEl?.classList.add('hidden');
+  // Hanya tutup di mobile — desktop biarkan Tailwind md: yang handle
+  if (window.innerWidth < 768) {
+    sidebarEl?.classList.add('-translate-x-full');
+    sidebarEl?.classList.remove('translate-x-0');
+    sidebarOverlayEl?.classList.add('hidden');
+  }
 }
 
 // ── NAVIGATION ────────────────────────────────────────────
@@ -596,7 +598,9 @@ const titles = { dashboard:'Ringkasan', permohonan:'Permohonan', berjalan:'Sedan
 function showPage(id, btn) {
   document.querySelectorAll('.page-section').forEach(p => p.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + id).classList.remove('hidden');
+  const pageEl = document.getElementById('page-' + id);
+  if (!pageEl) return;
+  pageEl.classList.remove('hidden');
   if (btn) btn.classList.add('active');
   document.getElementById('topbar-title').textContent = titles[id] || id;
   // Lazy load
@@ -605,7 +609,7 @@ function showPage(id, btn) {
   if (id==='artikel') loadArtikel();
   if (id==='berjalan') renderBerjalan();
   if (id==='permohonan') renderPermohonan();
-  gsap.from('#page-'+id, {y:12, opacity:0, duration:.4, ease:'power2.out'});
+  try { gsap.from('#page-'+id, {y:12, opacity:0, duration:.4, ease:'power2.out'}); } catch(_) {}
   if (window.innerWidth < 768) closeSidebar();
 }
 
@@ -1056,7 +1060,7 @@ document.getElementById('sidebar-overlay').addEventListener('click', closeSideba
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
 
 // ── INIT GSAP ANIMATION ───────────────────────────────────
-gsap.from('.glass', {x:-20, opacity:0, duration:.5, ease:'power2.out'});
+try { gsap.from('#sidebar', {x:-20, opacity:0, duration:.5, ease:'power2.out'}); } catch(_) {}
 </script>
 </body>
 </html>
