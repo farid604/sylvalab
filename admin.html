@@ -119,6 +119,50 @@ tailwind.config = {
   </div>
 </div>
 
+<!-- ── MODAL PENGEMBALIAN (dengan kondisi alat) ── -->
+<div id="modal-return" class="fixed inset-0 modal-backdrop z-50 hidden items-center justify-center p-4">
+  <div class="glass rounded-2xl p-7 w-full max-w-sm shadow-2xl">
+    <div class="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl mb-4">
+      <i class="fa-solid fa-box-open"></i>
+    </div>
+    <h3 class="text-lg font-semibold mb-1">Proses Pengembalian</h3>
+    <p id="return-desc" class="text-sm text-gray-400 mb-5">Konfirmasi pengembalian alat.</p>
+    <div class="mb-5">
+      <label class="block text-xs text-gray-400 uppercase tracking-wider mb-3">Kondisi Alat Dikembalikan</label>
+      <div class="grid grid-cols-3 gap-2" id="return-kondisi-group">
+        <label class="cursor-pointer">
+          <input type="radio" name="kondisi" value="BAIK" class="sr-only" checked>
+          <div class="kondisi-btn text-center px-3 py-2.5 rounded-xl border text-xs font-medium transition border-neon/50 bg-neon/15 text-neon">
+            <i class="fa-solid fa-circle-check block text-lg mb-1"></i> Baik
+            <div class="text-[10px] text-neon/60 mt-0.5">+15 poin</div>
+          </div>
+        </label>
+        <label class="cursor-pointer">
+          <input type="radio" name="kondisi" value="CUKUP" class="sr-only">
+          <div class="kondisi-btn text-center px-3 py-2.5 rounded-xl border text-xs font-medium transition border-yellow-500/40 bg-yellow-500/10 text-yellow-400">
+            <i class="fa-solid fa-circle-minus block text-lg mb-1"></i> Cukup
+            <div class="text-[10px] text-yellow-400/60 mt-0.5">+12 poin</div>
+          </div>
+        </label>
+        <label class="cursor-pointer">
+          <input type="radio" name="kondisi" value="RUSAK" class="sr-only">
+          <div class="kondisi-btn text-center px-3 py-2.5 rounded-xl border text-xs font-medium transition border-red-500/40 bg-red-500/10 text-red-400">
+            <i class="fa-solid fa-circle-xmark block text-lg mb-1"></i> Rusak
+            <div class="text-[10px] text-red-400/60 mt-0.5">+2 poin</div>
+          </div>
+        </label>
+      </div>
+    </div>
+    <input type="hidden" id="return-idTrans">
+    <input type="hidden" id="return-idAlat">
+    <input type="hidden" id="return-nim">
+    <div class="flex gap-3 justify-end">
+      <button onclick="closeModalReturn()" class="px-4 py-2 rounded-lg glass-light text-sm hover:bg-white/10 transition">Batal</button>
+      <button onclick="submitReturn()" class="px-5 py-2 rounded-lg bg-blue-500 text-white text-sm font-semibold hover:bg-blue-400 transition">Konfirmasi Kembali</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── MODAL FORM ALAT ── -->
 <div id="modal-alat" class="fixed inset-0 modal-backdrop z-50 hidden items-center justify-center p-4">
   <div class="glass rounded-2xl p-7 w-full max-w-lg shadow-2xl">
@@ -275,6 +319,14 @@ tailwind.config = {
       <button onclick="closeModalEditArt()" class="px-4 py-2 rounded-lg glass-light text-sm hover:bg-white/10 transition">Batal</button>
       <button onclick="submitEditArtikel()" class="px-5 py-2 rounded-lg bg-neon text-forest text-sm font-semibold hover:bg-green-300 transition">Simpan Perubahan</button>
     </div>
+  </div>
+</div>
+
+<!-- ── LOADING OVERLAY ── -->
+<div id="loading-overlay" class="fixed inset-0 z-[9998] bg-forest/80 backdrop-blur-sm flex items-center justify-center hidden">
+  <div class="text-center">
+    <div class="w-12 h-12 border-2 border-neon/30 border-t-neon rounded-full animate-spin mx-auto mb-4"></div>
+    <div class="text-sm text-gray-400">Memuat data SylvaLab...</div>
   </div>
 </div>
 
@@ -545,7 +597,34 @@ tailwind.config = {
 <script>
 const API = 'https://script.google.com/macros/s/AKfycbwQnP_7mA24EML-FMEvHE_y1thZTpmBrACEonUxauvR8quDwarcS3taqOcQktHSTzfA/exec';
 
-let allTrans = [], allAlat = [], allUsers = [], allArtikel = [];
+// ── STATE MANAGEMENT ──────────────────────────────────────
+// Semua data disimpan lokal setelah batch load — tidak perlu fetch ulang untuk filter/search
+const State = {
+  trans: [], alat: [], users: [], artikel: [],
+  lastFetch: null,
+
+  setAll(data) {
+    this.trans   = (data.transactions || []).filter(t => t.ID_Trans && String(t.ID_Trans).trim());
+    this.alat    = data.equipments || [];
+    this.users   = data.users || [];
+    this.artikel = data.articles || [];
+    this.lastFetch = Date.now();
+  },
+
+  // Filter lokal tanpa fetch ke server
+  alatFiltered(query, kat) {
+    return this.alat.filter(a => {
+      const matchQ = !query || a.Nama_Alat?.toLowerCase().includes(query.toLowerCase());
+      const matchK = !kat   || a.Kategori === kat;
+      return matchQ && matchK;
+    });
+  },
+
+  pending()   { return this.trans.filter(t => t.Status === 'PENDING'); },
+  dipinjam()  { return this.trans.filter(t => t.Status === 'DIPINJAM'); },
+  selesai()   { return this.trans.filter(t => t.Status === 'DIKEMBALIKAN'); },
+};
+
 let admin = null;
 let modalCb = null;
 
@@ -560,7 +639,8 @@ let modalCb = null;
   document.getElementById('sb-name').textContent = admin.nama;
   document.getElementById('sb-role').textContent = admin.role;
   if (admin.role === 'SUPER_ADMIN') document.getElementById('nav-users').style.display = 'flex';
-  document.getElementById('art-tgl') && (document.getElementById('art-tgl').value = new Date().toISOString().split('T')[0]);
+  const tglEl = document.getElementById('art-tgl');
+  if (tglEl) tglEl.value = new Date().toISOString().split('T')[0];
   updateClock();
   setInterval(updateClock, 1000);
   loadAll();
@@ -571,6 +651,13 @@ function updateClock() {
   document.getElementById('topbar-time').textContent =
     now.toLocaleDateString('id-ID',{weekday:'short',day:'2-digit',month:'short'}) + ' · ' +
     now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ── HELPER: KIRIM PARAM ADMIN KE SERVER (server-side auth) ──
+function adminParams() {
+  // Password admin disimpan di sessionStorage saat login
+  const pass = sessionStorage.getItem('sylvalab_pass') || '';
+  return `callerNim=${enc(admin.nim)}&callerPass=${enc(pass)}`;
 }
 
 // ── SIDEBAR (RESPONSIVE) ──────────────────────────────────
@@ -585,7 +672,6 @@ function openSidebar() {
 function closeSidebar() {
   if (!sidebarEl) sidebarEl = document.getElementById('sidebar');
   if (!sidebarOverlayEl) sidebarOverlayEl = document.getElementById('sidebar-overlay');
-  // Hanya tutup di mobile — desktop biarkan Tailwind md: yang handle
   if (window.innerWidth < 768) {
     sidebarEl?.classList.add('-translate-x-full');
     sidebarEl?.classList.remove('translate-x-0');
@@ -603,21 +689,44 @@ function showPage(id, btn) {
   pageEl.classList.remove('hidden');
   if (btn) btn.classList.add('active');
   document.getElementById('topbar-title').textContent = titles[id] || id;
-  // Lazy load
-  if (id==='alat') loadAlat();
-  if (id==='users') loadUsers();
-  if (id==='artikel') loadArtikel();
-  if (id==='berjalan') renderBerjalan();
+  // Render dari state lokal — tidak perlu fetch ulang
+  if (id==='alat')       renderAlat();
+  if (id==='users')      renderUsers();
+  if (id==='artikel')    renderArtikel();
+  if (id==='berjalan')   renderBerjalan();
   if (id==='permohonan') renderPermohonan();
   try { gsap.from('#page-'+id, {y:12, opacity:0, duration:.4, ease:'power2.out'}); } catch(_) {}
   if (window.innerWidth < 768) closeSidebar();
 }
 
-// ── DATA LOADING ─────────────────────────────────────────
+// ── BATCH DATA LOADING ────────────────────────────────────
+// Satu fetch untuk semua data — lebih cepat dari 4 fetch terpisah
 async function loadAll() {
-  await Promise.all([loadTransaksi(), loadAlat()]);
-  updateStats();
-  renderDashboard();
+  showLoadingOverlay(true);
+  try {
+    const d = await fetchGAS('action=getBatchData');
+    if (d.success) {
+      State.setAll(d);
+    } else {
+      // Fallback ke fetch individual jika getBatchData belum di-deploy
+      await Promise.all([loadTransaksi(), loadAlat(), loadArtikel()]);
+      if (admin.role === 'SUPER_ADMIN') await loadUsers();
+    }
+    updateStats();
+    renderDashboard();
+    renderAlat();
+    renderArtikel();
+    if (admin.role === 'SUPER_ADMIN') renderUsers();
+  } catch(e) {
+    toast('Gagal memuat data awal','err');
+  } finally {
+    showLoadingOverlay(false);
+  }
+}
+
+function showLoadingOverlay(show) {
+  const el = document.getElementById('loading-overlay');
+  if (el) el.classList.toggle('hidden', !show);
 }
 
 async function fetchGAS(params) {
@@ -625,59 +734,62 @@ async function fetchGAS(params) {
   return await res.json();
 }
 
+// Fetch individual (fallback + dipakai untuk refresh parsial)
 async function loadTransaksi() {
   try {
     const d = await fetchGAS('action=getTransactions');
-    allTrans = Array.isArray(d) ? d : (d.data || []);
-    // Filter out empty rows
-    allTrans = allTrans.filter(t => t.ID_Trans && String(t.ID_Trans).trim() !== '');
-    renderDashboard();
-    renderPermohonan();
-    renderBerjalan();
-    updateStats();
+    State.trans = (Array.isArray(d) ? d : (d.data||[])).filter(t => t.ID_Trans && String(t.ID_Trans).trim());
+    renderDashboard(); renderPermohonan(); renderBerjalan(); updateStats();
   } catch(e) { toast('Gagal memuat transaksi','err'); }
 }
-
 async function loadAlat() {
   try {
     const d = await fetchGAS('action=getEquipments');
-    allAlat = Array.isArray(d) ? d : (d.data || []);
-    renderAlat();
-    updateStats();
+    State.alat = Array.isArray(d) ? d : (d.data||[]);
+    renderAlat(); updateStats();
   } catch(e) { toast('Gagal memuat alat','err'); }
 }
-
 async function loadUsers() {
   try {
     const d = await fetchGAS('action=getUsers');
-    allUsers = Array.isArray(d) ? d : (d.data || []);
+    State.users = Array.isArray(d) ? d : (d.data||[]);
     renderUsers();
   } catch(e) { toast('Gagal memuat pengguna','err'); }
 }
-
 async function loadArtikel() {
   try {
     const d = await fetchGAS('action=getArticles');
-    allArtikel = Array.isArray(d) ? d : (d.data || []);
+    State.artikel = Array.isArray(d) ? d : (d.data||[]);
     renderArtikel();
   } catch(e) { toast('Gagal memuat artikel','err'); }
 }
 
 // ── STATS ─────────────────────────────────────────────────
 function updateStats() {
-  const pending = allTrans.filter(t=>t.Status==='PENDING').length;
-  const dipinjam = allTrans.filter(t=>t.Status==='DIPINJAM').length;
-  const selesai = allTrans.filter(t=>t.Status==='DIKEMBALIKAN').length;
-  document.getElementById('st-alat').textContent = allAlat.length;
-  document.getElementById('st-pending').textContent = pending;
-  document.getElementById('st-dipinjam').textContent = dipinjam;
-  document.getElementById('st-selesai').textContent = selesai;
-  document.getElementById('badge-pending').textContent = pending;
+  document.getElementById('st-alat').textContent    = State.alat.length;
+  document.getElementById('st-pending').textContent  = State.pending().length;
+  document.getElementById('st-dipinjam').textContent = State.dipinjam().length;
+  document.getElementById('st-selesai').textContent  = State.selesai().length;
+  document.getElementById('badge-pending').textContent = State.pending().length;
+}
+
+// ── GREEN SCORE HELPERS ───────────────────────────────────
+function scoreWidth(score) { return Math.min(score, 150) / 150 * 100; }
+function scoreColor(score) {
+  if (score >= 100) return 'bg-neon';
+  if (score >= 50)  return 'bg-yellow-400';
+  return 'bg-orange-400';
+}
+function scoreTier(score) {
+  if (score >= 100) return { label: '🌳 Ahli',   cls: 'text-neon' };
+  if (score >= 50)  return { label: '🌿 Menengah', cls: 'text-yellow-400' };
+  if (score >= 20)  return { label: '🌱 Pemula',  cls: 'text-orange-400' };
+  return { label: '🪴 Baru', cls: 'text-gray-400' };
 }
 
 // ── RENDER TABLES ─────────────────────────────────────────
 function renderDashboard() {
-  const pending = allTrans.filter(t=>t.Status==='PENDING').slice(0,5);
+  const pending = State.pending().slice(0,5);
   const tb = document.getElementById('tbl-dash-pending');
   if (!pending.length) { tb.innerHTML = emptyRow('Tidak ada permohonan baru saat ini 🎉', 5); return; }
   tb.innerHTML = pending.map(t => `
@@ -691,8 +803,8 @@ function renderDashboard() {
 }
 
 function renderPermohonan() {
-  const pending = allTrans.filter(t=>t.Status==='PENDING');
   const tb = document.getElementById('tbl-permohonan');
+  const pending = State.pending();
   if (!pending.length) { tb.innerHTML = emptyRow('Tidak ada permohonan PENDING 🎉', 6); return; }
   tb.innerHTML = pending.map(t => `
     <tr class="border-b border-white/5" id="row-${t.ID_Trans}">
@@ -706,8 +818,8 @@ function renderPermohonan() {
 }
 
 function renderBerjalan() {
-  const dipinjam = allTrans.filter(t=>t.Status==='DIPINJAM');
   const tb = document.getElementById('tbl-berjalan');
+  const dipinjam = State.dipinjam();
   if (!dipinjam.length) { tb.innerHTML = emptyRow('Tidak ada alat yang sedang dipinjam', 6); return; }
   const today = new Date().toISOString().split('T')[0];
   tb.innerHTML = dipinjam.map(t => {
@@ -719,7 +831,7 @@ function renderBerjalan() {
       <td class="px-6 py-3.5 text-gray-400">${t.Tgl_Pinjam||'—'}</td>
       <td class="px-6 py-3.5 ${late?'text-red-400 font-medium':''}">${t.Tgl_Kembali||'—'}${late?' ⚠':''}</td>
       <td class="px-6 py-3.5 text-right">
-        <button onclick="aksi('return','${t.ID_Trans}','${t.ID_Alat}','${t.NIM_Peminjam||''}')"
+        <button onclick="openModalReturn('${t.ID_Trans}','${t.ID_Alat}','${t.NIM_Peminjam||''}')"
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500 hover:text-white transition">
           <i class="fa-solid fa-box-open"></i> Terima Alat
         </button>
@@ -730,8 +842,8 @@ function renderBerjalan() {
 
 function renderAlat() {
   const tb = document.getElementById('tbl-alat');
-  if (!allAlat.length) { tb.innerHTML = emptyRow('Belum ada data alat', 6); return; }
-  tb.innerHTML = allAlat.map(a => {
+  if (!State.alat.length) { tb.innerHTML = emptyRow('Belum ada data alat', 6); return; }
+  tb.innerHTML = State.alat.map(a => {
     const stok = parseInt(a.Stok_Tersedia)||0, tot = parseInt(a.Stok_Total)||0;
     const sc = stok===0 ? 'text-red-400' : stok<=2 ? 'text-yellow-400' : 'text-neon';
     return `<tr class="border-b border-white/5">
@@ -754,19 +866,31 @@ function renderAlat() {
 
 function renderUsers() {
   const tb = document.getElementById('tbl-users');
-  if (!allUsers.length) { tb.innerHTML = emptyRow('Belum ada pengguna terdaftar', 5); return; }
-  const roleCls = {SUPER_ADMIN:'bg-red-500/15 text-red-400 border border-red-500/30', ADMIN:'bg-neon/15 text-neon border border-neon/30', PEMINJAM:'bg-white/10 text-gray-300 border border-white/20'};
-  tb.innerHTML = allUsers.map(u => `
+  if (!State.users.length) { tb.innerHTML = emptyRow('Belum ada pengguna terdaftar', 5); return; }
+  const roleCls = {
+    SUPER_ADMIN: 'bg-red-500/15 text-red-400 border border-red-500/30',
+    ADMIN:       'bg-neon/15 text-neon border border-neon/30',
+    PEMINJAM:    'bg-white/10 text-gray-300 border border-white/20'
+  };
+  // Urutkan berdasarkan Green Score tertinggi
+  const sorted = [...State.users].sort((a,b) => (b.Green_Score||0) - (a.Green_Score||0));
+  tb.innerHTML = sorted.map((u, idx) => `
     <tr class="border-b border-white/5">
       <td class="px-6 py-3.5 font-mono text-xs text-gray-400">${u.NIM_NIP}</td>
-      <td class="px-6 py-3.5 font-medium">${u.Nama_Lengkap}</td>
+      <td class="px-6 py-3.5">
+        <div class="flex items-center gap-2">
+          ${idx === 0 ? '<span title="Top Green Score" class="text-yellow-400 text-xs">🏆</span>' : ''}
+          <span class="font-medium">${u.Nama_Lengkap}</span>
+        </div>
+      </td>
       <td class="px-6 py-3.5"><span class="text-xs px-2 py-1 rounded-full ${roleCls[u.Role]||roleCls.PEMINJAM}">${u.Role}</span></td>
       <td class="px-6 py-3.5">
         <div class="flex items-center gap-2">
-          <span class="text-neon font-semibold text-sm">${u.Green_Score||0}</span>
-          <div class="w-20 h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div class="h-full bg-neon rounded-full score-fill" style="width:${Math.min(u.Green_Score||0,100)}%"></div>
+          <span class="${scoreColor(u.Green_Score||0).replace('bg-','text-')} font-semibold text-sm min-w-[28px]">${u.Green_Score||0}</span>
+          <div class="flex-1 max-w-[80px] h-2 bg-white/10 rounded-full overflow-hidden">
+            <div class="h-full rounded-full score-fill ${scoreColor(u.Green_Score||0)}" style="width:${scoreWidth(u.Green_Score||0)}%"></div>
           </div>
+          <span class="text-[10px] ${scoreTier(u.Green_Score||0).cls} font-medium">${scoreTier(u.Green_Score||0).label}</span>
         </div>
       </td>
       <td class="px-6 py-3.5 text-right">
@@ -779,14 +903,14 @@ function renderUsers() {
 
 function renderArtikel() {
   const el = document.getElementById('artikel-grid');
-  if (!allArtikel.length) {
+  if (!State.artikel.length) {
     el.innerHTML = `<div class="glass-light rounded-2xl p-8 text-center text-gray-500 col-span-2">
       <i class="fa-regular fa-newspaper text-3xl mb-3 block opacity-40"></i>
       Belum ada artikel. Klik "Tulis Artikel" untuk mulai.
     </div>`;
     return;
   }
-  el.innerHTML = allArtikel.map(a => `
+  el.innerHTML = State.artikel.map(a => `
     <div class="glass-light rounded-2xl overflow-hidden flex flex-col">
       ${a.URL_Cover ? `<img src="${a.URL_Cover}" class="w-full h-40 object-cover" onerror="this.style.display='none'"/>` : ''}
       <div class="p-5 flex flex-col flex-1">
@@ -800,7 +924,7 @@ function renderArtikel() {
           <button onclick='editArtikel(${JSON.stringify(a).replace(/'/g,"&apos;")})' class="px-3 py-1.5 rounded-lg text-xs bg-white/10 hover:bg-white/20 transition flex items-center gap-1.5">
             <i class="fa-solid fa-pen-to-square text-xs"></i> Edit
           </button>
-          <button onclick="konfirmHapusArtikel('${a.ID_Artikel}','${(a.Judul||'').replace(/'/g,"\\'")}')" class="px-3 py-1.5 rounded-lg text-xs bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white transition flex items-center gap-1.5">
+          <button onclick="konfirmHapusArtikel('${a.ID_Artikel}','${(a.Judul||'').replace(/'/g,"\\'")}') " class="px-3 py-1.5 rounded-lg text-xs bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white transition flex items-center gap-1.5">
             <i class="fa-solid fa-trash text-xs"></i>
           </button>
         </div>
@@ -808,8 +932,8 @@ function renderArtikel() {
     </div>`).join('');
 }
 
-// ── ACTION BUTTONS HELPER ─────────────────────────────────
-function actionBtns(t, ctx) {
+// ── ACTION BUTTONS ────────────────────────────────────────
+function actionBtns(t) {
   return `<div class="flex justify-end gap-2">
     <button onclick="aksi('reject','${t.ID_Trans}','${t.ID_Alat}','')"
       class="w-8 h-8 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white transition flex items-center justify-center text-xs" title="Tolak">
@@ -826,32 +950,68 @@ function emptyRow(msg, cols) {
   return `<tr><td colspan="${cols}" class="px-6 py-10 text-center text-gray-500 text-sm">${msg}</td></tr>`;
 }
 
-// ── AKSI TRANSAKSI ────────────────────────────────────────
+// ── AKSI TRANSAKSI (approve/reject) ──────────────────────
 function aksi(type, idTrans, idAlat, nim) {
   const cfg = {
     approve: { title:'Setujui Permohonan', msg:`Setujui <b>${idTrans}</b>? Stok alat <b>${idAlat}</b> akan dipotong 1.`, icon:'fa-check-circle', iconcls:'bg-neon/20 text-neon', btnCls:'bg-neon text-forest hover:bg-green-300' },
     reject:  { title:'Tolak Permohonan',   msg:`Tolak <b>${idTrans}</b>? Stok tidak akan berubah.`, icon:'fa-times-circle', iconcls:'bg-red-500/20 text-red-400', btnCls:'bg-red-500 text-white hover:bg-red-400' },
-    return:  { title:'Proses Pengembalian', msg:`Konfirmasi alat <b>${idAlat}</b> dari transaksi <b>${idTrans}</b> telah dikembalikan secara fisik?`, icon:'fa-box-open', iconcls:'bg-blue-500/20 text-blue-400', btnCls:'bg-blue-500 text-white hover:bg-blue-400' }
   };
   const c = cfg[type];
   showModal(c.title, c.msg, c.icon, c.iconcls, c.btnCls, async () => {
+    const ap = adminParams();
     const urlMap = {
-      approve: `${API}?action=approveTransaction&ID_Trans=${idTrans}&ID_Alat=${idAlat}`,
-      reject:  `${API}?action=rejectTransaction&ID_Trans=${idTrans}`,
-      return:  `${API}?action=returnTransaction&ID_Trans=${idTrans}&ID_Alat=${idAlat}&nim=${encodeURIComponent(nim)}`
+      approve: `${API}?action=approveTransaction&ID_Trans=${idTrans}&ID_Alat=${idAlat}&${ap}`,
+      reject:  `${API}?action=rejectTransaction&ID_Trans=${idTrans}&${ap}`,
     };
     try {
       const res = await fetch(urlMap[type]);
       const d = await res.json();
-      if (d.success) {
-        toast(d.message, 'ok');
-        await loadTransaksi();
-        loadAlat();
-      } else {
-        toast(d.message||'Gagal', 'err');
-      }
+      if (d.success) { toast(d.message, 'ok'); await loadTransaksi(); loadAlat(); }
+      else toast(d.message||'Gagal', 'err');
     } catch(e) { toast('Koneksi gagal','err'); }
   });
+}
+
+// ── MODAL PENGEMBALIAN ────────────────────────────────────
+function openModalReturn(idTrans, idAlat, nim) {
+  document.getElementById('return-idTrans').value = idTrans;
+  document.getElementById('return-idAlat').value  = idAlat;
+  document.getElementById('return-nim').value     = nim;
+  document.getElementById('return-desc').textContent = `Alat ${idAlat} dari transaksi ${idTrans}`;
+  // Reset radio ke BAIK
+  document.querySelector('input[name="kondisi"][value="BAIK"]').checked = true;
+  document.getElementById('modal-return').classList.remove('hidden');
+  document.getElementById('modal-return').classList.add('flex');
+}
+function closeModalReturn() {
+  document.getElementById('modal-return').classList.add('hidden');
+  document.getElementById('modal-return').classList.remove('flex');
+}
+async function submitReturn() {
+  const idTrans = document.getElementById('return-idTrans').value;
+  const idAlat  = document.getElementById('return-idAlat').value;
+  const nim     = document.getElementById('return-nim').value;
+  const kondisi = document.querySelector('input[name="kondisi"]:checked')?.value || 'BAIK';
+  const tglAktual = new Date().toISOString().split('T')[0];
+  const ap = adminParams();
+  closeModalReturn();
+  try {
+    const res = await fetch(`${API}?action=returnTransaction&ID_Trans=${idTrans}&ID_Alat=${idAlat}&nim=${enc(nim)}&kondisi=${kondisi}&tglKembaliAktual=${tglAktual}&${ap}`);
+    const d = await res.json();
+    if (d.success) {
+      toast(d.message, 'ok');
+      // Tampilkan feedback Green Score
+      if (d.poin !== undefined) {
+        const tepat = d.isOnTime ? '✅ Tepat waktu' : '⚠️ Terlambat';
+        setTimeout(() => toast(`${tepat} — kondisi ${kondisi} → +${d.poin} poin`, ''), 1200);
+      }
+      await loadTransaksi();
+      loadAlat();
+      if (admin.role === 'SUPER_ADMIN') loadUsers();
+    } else {
+      toast(d.message||'Gagal', 'err');
+    }
+  } catch(e) { toast('Koneksi gagal','err'); }
 }
 
 // ── ALAT CRUD ─────────────────────────────────────────────
@@ -889,8 +1049,8 @@ async function submitAlat() {
   if (!nama||!stok) { toast('Nama dan Stok wajib diisi!','warn'); return; }
   const action = id ? 'updateAlat' : 'createAlat';
   const params = id
-    ? `action=${action}&id=${id}&nama=${enc(nama)}&kategori=${enc(kat)}&stok=${stok}&foto=${enc(foto)}`
-    : `action=${action}&nama=${enc(nama)}&kategori=${enc(kat)}&stok=${stok}&foto=${enc(foto)}`;
+    ? `action=${action}&id=${id}&nama=${enc(nama)}&kategori=${enc(kat)}&stok=${stok}&foto=${enc(foto)}&${adminParams()}`
+    : `action=${action}&nama=${enc(nama)}&kategori=${enc(kat)}&stok=${stok}&foto=${enc(foto)}&${adminParams()}`;
   try {
     const d = await fetchGAS(params);
     if (d.success) { toast(d.message,'ok'); closeModalAlat(); loadAlat(); }
@@ -899,7 +1059,7 @@ async function submitAlat() {
 }
 function konfirmHapusAlat(id, nama) {
   showModal('Hapus Alat', `Hapus <b>${nama}</b> (${id}) secara permanen?`, 'fa-trash', 'bg-red-500/20 text-red-400', 'bg-red-500 text-white hover:bg-red-400', async () => {
-    const d = await fetchGAS(`action=deleteAlat&id=${id}`);
+    const d = await fetchGAS(`action=deleteAlat&id=${id}&${adminParams()}`);
     if (d.success) { toast(d.message,'ok'); loadAlat(); } else toast(d.message||'Gagal','err');
   });
 }
@@ -921,17 +1081,17 @@ async function submitUser() {
   const role = document.getElementById('fu-role').value;
   const pass = document.getElementById('fu-pass').value.trim()||'12345';
   if (!nim||!nama) { toast('NIM dan Nama wajib diisi!','warn'); return; }
-  const d = await fetchGAS(`action=createUser&nim=${enc(nim)}&nama=${enc(nama)}&role=${role}&password=${enc(pass)}`);
+  const d = await fetchGAS(`action=createUser&nim=${enc(nim)}&nama=${enc(nama)}&role=${role}&password=${enc(pass)}&${adminParams()}`);
   if (d.success) { toast(d.message,'ok'); closeModalUser(); loadUsers(); } else toast(d.message||'Gagal','err');
 }
 function konfirmHapusUser(nim, nama) {
   showModal('Hapus Pengguna', `Hapus akun <b>${nama}</b> (${nim})?`, 'fa-user-minus', 'bg-red-500/20 text-red-400', 'bg-red-500 text-white hover:bg-red-400', async () => {
-    const d = await fetchGAS(`action=deleteUser&nim=${enc(nim)}`);
+    const d = await fetchGAS(`action=deleteUser&nim=${enc(nim)}&${adminParams()}`);
     if (d.success) { toast(d.message,'ok'); loadUsers(); } else toast(d.message||'Gagal','err');
   });
 }
 
-// ── ARTIKEL ───────────────────────────────────────────────
+// ── ARTIKEL CRUD ──────────────────────────────────────────
 function openModalArt() {
   document.getElementById('modal-art').classList.remove('hidden');
   document.getElementById('modal-art').classList.add('flex');
@@ -947,7 +1107,7 @@ async function submitArtikel() {
   const konten = document.getElementById('art-konten').value.trim();
   const cover  = document.getElementById('art-cover').value.trim();
   if (!judul||!konten) { toast('Judul dan Isi wajib diisi!','warn'); return; }
-  const d = await fetchGAS(`action=createArticle&judul=${enc(judul)}&tanggal=${tgl}&konten=${enc(konten)}&cover=${enc(cover)}`);
+  const d = await fetchGAS(`action=createArticle&judul=${enc(judul)}&tanggal=${tgl}&konten=${enc(konten)}&cover=${enc(cover)}&${adminParams()}`);
   if (d.success) { toast(d.message,'ok'); closeModalArt(); document.getElementById('art-judul').value=''; document.getElementById('art-konten').value=''; loadArtikel(); }
   else toast(d.message||'Gagal','err');
 }
@@ -958,13 +1118,9 @@ function bacaArtikel(a) {
   document.getElementById('baca-tanggal').textContent = a.Tanggal_Terbit || '—';
   document.getElementById('baca-konten').textContent = a.Konten_Teks || '';
   const coverWrap = document.getElementById('baca-cover-wrap');
-  const coverImg = document.getElementById('baca-cover');
-  if (a.URL_Cover) {
-    coverImg.src = a.URL_Cover;
-    coverWrap.classList.remove('hidden');
-  } else {
-    coverWrap.classList.add('hidden');
-  }
+  const coverImg  = document.getElementById('baca-cover');
+  if (a.URL_Cover) { coverImg.src = a.URL_Cover; coverWrap.classList.remove('hidden'); }
+  else coverWrap.classList.add('hidden');
   document.getElementById('modal-baca').classList.remove('hidden');
   document.getElementById('modal-baca').classList.add('flex');
 }
@@ -993,21 +1149,21 @@ async function submitEditArtikel() {
   const tgl    = document.getElementById('edit-art-tgl').value;
   const konten = document.getElementById('edit-art-konten').value.trim();
   const cover  = document.getElementById('edit-art-cover').value.trim();
-  if (!judul || !konten) { toast('Judul dan Isi wajib diisi!', 'warn'); return; }
+  if (!judul||!konten) { toast('Judul dan Isi wajib diisi!','warn'); return; }
   try {
-    const d = await fetchGAS(`action=updateArticle&id=${enc(id)}&judul=${enc(judul)}&tanggal=${tgl}&konten=${enc(konten)}&cover=${enc(cover)}`);
-    if (d.success) { toast(d.message, 'ok'); closeModalEditArt(); loadArtikel(); }
-    else toast(d.message || 'Gagal memperbarui artikel', 'err');
-  } catch(e) { toast('Koneksi gagal', 'err'); }
+    const d = await fetchGAS(`action=updateArticle&id=${enc(id)}&judul=${enc(judul)}&tanggal=${tgl}&konten=${enc(konten)}&cover=${enc(cover)}&${adminParams()}`);
+    if (d.success) { toast(d.message,'ok'); closeModalEditArt(); loadArtikel(); }
+    else toast(d.message||'Gagal','err');
+  } catch(e) { toast('Koneksi gagal','err'); }
 }
 function konfirmHapusArtikel(id, judul) {
   showModal('Hapus Artikel', `Hapus artikel <b>${judul}</b> secara permanen?`, 'fa-trash', 'bg-red-500/20 text-red-400', 'bg-red-500 text-white hover:bg-red-400', async () => {
-    const d = await fetchGAS(`action=deleteArticle&id=${enc(id)}`);
-    if (d.success) { toast(d.message, 'ok'); loadArtikel(); } else toast(d.message || 'Gagal', 'err');
+    const d = await fetchGAS(`action=deleteArticle&id=${enc(id)}&${adminParams()}`);
+    if (d.success) { toast(d.message,'ok'); loadArtikel(); } else toast(d.message||'Gagal','err');
   });
 }
 
-// ── MODAL ─────────────────────────────────────────────────
+// ── MODAL KONFIRMASI ──────────────────────────────────────
 function showModal(title, msg, icon, iconCls, btnCls, cb) {
   document.getElementById('modal-icon').className = `w-12 h-12 rounded-xl flex items-center justify-center text-xl ${iconCls}`;
   document.getElementById('modal-icon').innerHTML = `<i class="fa-solid ${icon}"></i>`;
@@ -1035,10 +1191,10 @@ function toast(msg, type='') {
   const title = document.getElementById('toast-title');
   const m = document.getElementById('toast-msg');
   const cfg = {
-    ok:   {title:'Berhasil', icls:'fa-check-circle text-neon', border:'#00e676'},
-    err:  {title:'Gagal',    icls:'fa-circle-xmark text-red-400', border:'#ef4444'},
-    warn: {title:'Perhatian',icls:'fa-circle-exclamation text-yellow-400', border:'#eab308'},
-    '':   {title:'Info',     icls:'fa-circle-info text-blue-400', border:'#60a5fa'},
+    ok:   {title:'Berhasil',  icls:'fa-check-circle text-neon',             border:'#00e676'},
+    err:  {title:'Gagal',     icls:'fa-circle-xmark text-red-400',          border:'#ef4444'},
+    warn: {title:'Perhatian', icls:'fa-circle-exclamation text-yellow-400', border:'#eab308'},
+    '':   {title:'Info',      icls:'fa-circle-info text-blue-400',          border:'#60a5fa'},
   };
   const c = cfg[type]||cfg[''];
   title.textContent = c.title;
@@ -1052,14 +1208,16 @@ function toast(msg, type='') {
 
 // ── UTILS ─────────────────────────────────────────────────
 const enc = encodeURIComponent;
-function logout() { sessionStorage.removeItem('sylvalab_user'); window.location.href='login.html'; }
+function logout() { sessionStorage.clear(); window.location.href='login.html'; }
+
 document.getElementById('modal').addEventListener('click',e=>{ if(e.target===document.getElementById('modal')) closeModal(); });
 document.getElementById('modal-baca').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-baca')) closeModalBaca(); });
 document.getElementById('modal-edit-art').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-edit-art')) closeModalEditArt(); });
+document.getElementById('modal-return').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-return')) closeModalReturn(); });
 document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeModalReturn(); closeSidebar(); } });
 
-// ── INIT GSAP ANIMATION ───────────────────────────────────
+// ── INIT ──────────────────────────────────────────────────
 try { gsap.from('#sidebar', {x:-20, opacity:0, duration:.5, ease:'power2.out'}); } catch(_) {}
 </script>
 </body>
