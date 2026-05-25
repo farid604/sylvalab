@@ -223,6 +223,61 @@ tailwind.config = {
   </div>
 </div>
 
+<!-- ── MODAL BACA ARTIKEL ── -->
+<div id="modal-baca" class="fixed inset-0 modal-backdrop z-50 hidden items-center justify-center p-4">
+  <div class="glass rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+    <div class="flex items-center justify-between p-6 border-b border-white/10 flex-shrink-0">
+      <h3 id="baca-judul" class="text-lg font-semibold pr-4 leading-snug"></h3>
+      <button onclick="closeModalBaca()" class="w-8 h-8 rounded-lg glass-light text-gray-400 hover:text-white flex items-center justify-center transition flex-shrink-0">✕</button>
+    </div>
+    <div id="baca-cover-wrap" class="flex-shrink-0 hidden">
+      <img id="baca-cover" src="" class="w-full h-52 object-cover" onerror="this.parentElement.style.display='none'"/>
+    </div>
+    <div class="p-6 overflow-y-auto flex-1">
+      <div class="text-xs text-gray-500 mb-4" id="baca-tanggal"></div>
+      <div id="baca-konten" class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap"></div>
+    </div>
+    <div class="p-4 border-t border-white/10 flex-shrink-0 flex justify-end">
+      <button onclick="closeModalBaca()" class="px-4 py-2 rounded-lg glass-light text-sm hover:bg-white/10 transition">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL EDIT ARTIKEL ── -->
+<div id="modal-edit-art" class="fixed inset-0 modal-backdrop z-50 hidden items-center justify-center p-4">
+  <div class="glass rounded-2xl p-7 w-full max-w-lg shadow-2xl">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-lg font-semibold">Edit Artikel</h3>
+      <button onclick="closeModalEditArt()" class="w-8 h-8 rounded-lg glass-light text-gray-400 hover:text-white flex items-center justify-center transition">✕</button>
+    </div>
+    <div class="space-y-4 mb-4">
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wider mb-2">Judul *</label>
+        <input id="edit-art-judul" type="text" class="w-full h-10 rounded-lg px-3 text-sm" placeholder="Judul artikel">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 uppercase tracking-wider mb-2">Tanggal</label>
+          <input id="edit-art-tgl" type="date" class="w-full h-10 rounded-lg px-3 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 uppercase tracking-wider mb-2">URL Cover</label>
+          <input id="edit-art-cover" type="text" class="w-full h-10 rounded-lg px-3 text-sm" placeholder="https://...">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 uppercase tracking-wider mb-2">Isi Artikel *</label>
+        <textarea id="edit-art-konten" rows="5" class="w-full rounded-lg px-3 py-2 text-sm resize-none" placeholder="Isi artikel..."></textarea>
+      </div>
+    </div>
+    <input type="hidden" id="edit-art-id">
+    <div class="flex gap-3 justify-end">
+      <button onclick="closeModalEditArt()" class="px-4 py-2 rounded-lg glass-light text-sm hover:bg-white/10 transition">Batal</button>
+      <button onclick="submitEditArtikel()" class="px-5 py-2 rounded-lg bg-neon text-forest text-sm font-semibold hover:bg-green-300 transition">Simpan Perubahan</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── LAYOUT ── -->
 <div class="relative flex h-screen overflow-hidden">
 
@@ -728,12 +783,23 @@ function renderArtikel() {
     return;
   }
   el.innerHTML = allArtikel.map(a => `
-    <div class="glass-light rounded-2xl overflow-hidden">
+    <div class="glass-light rounded-2xl overflow-hidden flex flex-col">
       ${a.URL_Cover ? `<img src="${a.URL_Cover}" class="w-full h-40 object-cover" onerror="this.style.display='none'"/>` : ''}
-      <div class="p-5">
+      <div class="p-5 flex flex-col flex-1">
         <div class="text-xs text-gray-500 mb-2">${a.Tanggal_Terbit||'—'}</div>
         <h4 class="font-semibold mb-2">${a.Judul}</h4>
-        <p class="text-sm text-gray-400 line-clamp-2">${a.Konten_Teks||''}</p>
+        <p class="text-sm text-gray-400 line-clamp-2 flex-1">${a.Konten_Teks||''}</p>
+        <div class="flex gap-2 mt-4 pt-4 border-t border-white/10">
+          <button onclick='bacaArtikel(${JSON.stringify(a).replace(/'/g,"&apos;")})' class="flex-1 px-3 py-1.5 rounded-lg text-xs bg-neon/15 text-neon border border-neon/30 hover:bg-neon hover:text-forest transition flex items-center justify-center gap-1.5 font-medium">
+            <i class="fa-solid fa-book-open text-xs"></i> Baca Lengkap
+          </button>
+          <button onclick='editArtikel(${JSON.stringify(a).replace(/'/g,"&apos;")})' class="px-3 py-1.5 rounded-lg text-xs bg-white/10 hover:bg-white/20 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-pen-to-square text-xs"></i> Edit
+          </button>
+          <button onclick="konfirmHapusArtikel('${a.ID_Artikel}','${(a.Judul||'').replace(/'/g,"\\'")}')" class="px-3 py-1.5 rounded-lg text-xs bg-red-500/15 text-red-400 hover:bg-red-500 hover:text-white transition flex items-center gap-1.5">
+            <i class="fa-solid fa-trash text-xs"></i>
+          </button>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -882,6 +948,61 @@ async function submitArtikel() {
   else toast(d.message||'Gagal','err');
 }
 
+// ── MODAL BACA ARTIKEL ────────────────────────────────────
+function bacaArtikel(a) {
+  document.getElementById('baca-judul').textContent = a.Judul || '';
+  document.getElementById('baca-tanggal').textContent = a.Tanggal_Terbit || '—';
+  document.getElementById('baca-konten').textContent = a.Konten_Teks || '';
+  const coverWrap = document.getElementById('baca-cover-wrap');
+  const coverImg = document.getElementById('baca-cover');
+  if (a.URL_Cover) {
+    coverImg.src = a.URL_Cover;
+    coverWrap.classList.remove('hidden');
+  } else {
+    coverWrap.classList.add('hidden');
+  }
+  document.getElementById('modal-baca').classList.remove('hidden');
+  document.getElementById('modal-baca').classList.add('flex');
+}
+function closeModalBaca() {
+  document.getElementById('modal-baca').classList.add('hidden');
+  document.getElementById('modal-baca').classList.remove('flex');
+}
+
+// ── MODAL EDIT ARTIKEL ────────────────────────────────────
+function editArtikel(a) {
+  document.getElementById('edit-art-id').value = a.ID_Artikel;
+  document.getElementById('edit-art-judul').value = a.Judul || '';
+  document.getElementById('edit-art-tgl').value = a.Tanggal_Terbit || '';
+  document.getElementById('edit-art-konten').value = a.Konten_Teks || '';
+  document.getElementById('edit-art-cover').value = a.URL_Cover || '';
+  document.getElementById('modal-edit-art').classList.remove('hidden');
+  document.getElementById('modal-edit-art').classList.add('flex');
+}
+function closeModalEditArt() {
+  document.getElementById('modal-edit-art').classList.add('hidden');
+  document.getElementById('modal-edit-art').classList.remove('flex');
+}
+async function submitEditArtikel() {
+  const id     = document.getElementById('edit-art-id').value;
+  const judul  = document.getElementById('edit-art-judul').value.trim();
+  const tgl    = document.getElementById('edit-art-tgl').value;
+  const konten = document.getElementById('edit-art-konten').value.trim();
+  const cover  = document.getElementById('edit-art-cover').value.trim();
+  if (!judul || !konten) { toast('Judul dan Isi wajib diisi!', 'warn'); return; }
+  try {
+    const d = await fetchGAS(`action=updateArticle&id=${enc(id)}&judul=${enc(judul)}&tanggal=${tgl}&konten=${enc(konten)}&cover=${enc(cover)}`);
+    if (d.success) { toast(d.message, 'ok'); closeModalEditArt(); loadArtikel(); }
+    else toast(d.message || 'Gagal memperbarui artikel', 'err');
+  } catch(e) { toast('Koneksi gagal', 'err'); }
+}
+function konfirmHapusArtikel(id, judul) {
+  showModal('Hapus Artikel', `Hapus artikel <b>${judul}</b> secara permanen?`, 'fa-trash', 'bg-red-500/20 text-red-400', 'bg-red-500 text-white hover:bg-red-400', async () => {
+    const d = await fetchGAS(`action=deleteArticle&id=${enc(id)}`);
+    if (d.success) { toast(d.message, 'ok'); loadArtikel(); } else toast(d.message || 'Gagal', 'err');
+  });
+}
+
 // ── MODAL ─────────────────────────────────────────────────
 function showModal(title, msg, icon, iconCls, btnCls, cb) {
   document.getElementById('modal-icon').className = `w-12 h-12 rounded-xl flex items-center justify-center text-xl ${iconCls}`;
@@ -929,6 +1050,8 @@ function toast(msg, type='') {
 const enc = encodeURIComponent;
 function logout() { sessionStorage.removeItem('sylvalab_user'); window.location.href='login.html'; }
 document.getElementById('modal').addEventListener('click',e=>{ if(e.target===document.getElementById('modal')) closeModal(); });
+document.getElementById('modal-baca').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-baca')) closeModalBaca(); });
+document.getElementById('modal-edit-art').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-edit-art')) closeModalEditArt(); });
 document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSidebar(); });
 
